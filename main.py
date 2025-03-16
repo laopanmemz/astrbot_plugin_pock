@@ -30,11 +30,12 @@ class PokeMonitorPlugin(Star):
             self.poke_back_probability = self.config['poke_back_probability']
             self.super_poke_probability = self.config['super_poke_probability']
         except FileNotFoundError:
-            self.logger.error(f"未找到配置文件: {config_path}")
+            pass
         except Exception as e:
-            self.logger.error(f"读取配置文件时出错: {str(e)}")
+            pass
 
         self._clean_legacy_directories()
+        self._clean_emoji_directory()  # 添加此行以在启动时清理表情包目录
 
     def _create_default_config(self, config_path):
         """创建默认配置文件"""
@@ -73,9 +74,8 @@ class PokeMonitorPlugin(Star):
         try:
             with open(config_path, 'w', encoding='utf-8') as f:
                 yaml.dump(default_config, f, allow_unicode=True, default_flow_style=False)
-            self.logger.info(f"已创建默认配置文件: {config_path}")
         except Exception as e:
-            self.logger.error(f"创建默认配置文件时出错: {str(e)}")
+            pass
 
     def _clean_legacy_directories(self):
         """安全清理旧目录（仅删除特定目录）"""
@@ -88,9 +88,20 @@ class PokeMonitorPlugin(Star):
             try:
                 if os.path.exists(path):
                     shutil.rmtree(path)
-                    self.logger.info(f"已清理旧目录: {path}")
             except Exception as e:
-                self.logger.error(f"清理目录 {path} 失败: {str(e)}")
+                pass
+
+    def _clean_emoji_directory(self):
+        """清理表情包目录下的所有图片"""
+        save_dir = os.path.join("data", "plugins", "astrbot_plugin_pock", "poke_monitor")
+        if os.path.exists(save_dir):
+            for filename in os.listdir(save_dir):
+                file_path = os.path.join(save_dir, filename)
+                try:
+                    if os.path.isfile(file_path):
+                        os.unlink(file_path)
+                except Exception as e:
+                    pass
 
     @event_message_type(EventMessageType.GROUP_MESSAGE)
     async def on_group_message(self, event: AstrMessageEvent):
@@ -152,7 +163,7 @@ class PokeMonitorPlugin(Star):
                                 try:
                                     await client.api.call_action('send_poke', **payloads)
                                 except Exception as e:
-                                    self.logger.error(f"发送戳一戳失败: {str(e)}")
+                                    pass
 
                 # 用户戳其他人（且不是机器人自己触发的）
                 elif str(sender_id) != str(bot_id):  
@@ -183,6 +194,13 @@ class PokeMonitorPlugin(Star):
                                     with open(image_path, "wb") as f:
                                         f.write(response.content)
                                     yield event.image_result(image_path)
+
+                                    # 在发送成功后删除图片
+                                    if os.path.exists(image_path):
+                                        try:
+                                            os.remove(image_path)
+                                        except Exception as e:
+                                            pass
                                     break
                                 else:
                                     yield event.plain_result(f"表情包请求失败，状态码：{response.status_code}")
