@@ -229,11 +229,17 @@ class PokeMonitorPlugin(Star):
         # 判断 WechatPadPro 拍一拍事件
         if raw_message.get("to_user_name"):
             content_str = raw_message["content"]["str"]  # 逐层获取data
+            # 只处理拍一拍类型的 sysmsg 消息
+            if raw_message.get("msg_type") != 10002:
+                return  # 非拍一拍消息，返回不处理
             # 过滤前缀，拿到xml全文，获取xml对象（群聊场景分割掉前缀再解析，如果抛出 IndexError 则判断为私聊场景，直接解析）
             try:
                 xml_content = Selector(text = content_str.split(":", 1)[1].strip())
             except IndexError:
                 xml_content = content_str.strip()
+                is_private = True
+            # 统一解析为 Selector 对象
+            xml_content = Selector(text=xml_content, type="html")
             bot_id = event.get_self_id() # 获得bot自身wxid
             sender_id = xml_content.xpath("//pat/fromusername//text()").get()  # 谁拍的（wxid）
             chatusername = xml_content.xpath("//pat/chatusername//text()").get()  # 在哪里拍的（chatroom）
@@ -306,6 +312,10 @@ class PokeMonitorPlugin(Star):
 
                 # 用户戳其他人（且不是机器人自己触发的）
                 elif str(sender_id) != str(bot_id):
+                    # 如果是私聊场景，自己戳自己（貌似也只能这样了），则直接停止事件传播，不产出表情包
+                    if is_private:
+                        event.stop_event()
+                        return
                     # 随机触发表情包
                     if self.feature_switches.get('emoji_trigger_enabled', True) and random.random() < self.random_emoji_trigger_probability:
                         available_actions = list(self.emoji_url_mapping.keys())
