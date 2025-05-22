@@ -187,7 +187,7 @@ class PokeMonitorPlugin(Star):
                         emoji_type = self.emoji_url_mapping[selected_action] # 拿到随机表情包的 type
 
                         url = "https://api.lolimi.cn/API/preview/api.php" # 原API的新版接口
-                        params = {'QQ': target_id, "action": "create_meme", "type": emoji_type} # 构建请求参数
+                        params = {'qq': target_id, "action": "create_meme", "type": emoji_type} # 构建请求参数
 
                         # 硬编码请求配置
                         timeout = self.timeout # 超时时间，移至配置文件修改
@@ -228,6 +228,7 @@ class PokeMonitorPlugin(Star):
                                 break
         # 判断 WechatPadPro 拍一拍事件
         if raw_message.get("to_user_name"):
+            is_private = False
             content_str = raw_message["content"]["str"]  # 逐层获取data
             # 只处理拍一拍类型的 sysmsg 消息
             if raw_message.get("msg_type") != 10002:
@@ -238,8 +239,8 @@ class PokeMonitorPlugin(Star):
             except IndexError:
                 xml_content = content_str.strip()
                 is_private = True
-            # 统一解析为 Selector 对象
-            xml_content = Selector(text=xml_content, type="html")
+            if not isinstance(xml_content, Selector):
+                xml_content = Selector(text=xml_content, type="html")
             bot_id = event.get_self_id() # 获得bot自身wxid
             sender_id = xml_content.xpath("//pat/fromusername//text()").get()  # 谁拍的（wxid）
             chatusername = xml_content.xpath("//pat/chatusername//text()").get()  # 在哪里拍的（chatroom）
@@ -349,7 +350,7 @@ class PokeMonitorPlugin(Star):
 
                                 big_head_img_url = next(
                                     (member["big_head_img_url"] for member in members_list if
-                                     member["user_name"] == sender_id), None)
+                                     member["user_name"] == target_id), None)
 
                                 # 拿到头像 URL 后，直接拿给API去制作表情包（接口带上i = 2参数后，qq参数可以直接传图片URL）
                                 params = {'qq': big_head_img_url, "i": "2", "action": "create_meme", "type": emoji_type}
