@@ -8,6 +8,10 @@ import os
 import time
 import shutil
 import yaml
+import logging
+import asyncio
+
+logger = logging.getLogger(__name__)
 
 @register("poke_monitor", "长安某", "监控戳一戳事件插件", "1.6.0")
 class PokeMonitorPlugin(Star):
@@ -15,6 +19,8 @@ class PokeMonitorPlugin(Star):
         super().__init__(context)
         self.global_poke_timestamps = []  # 全局戳/拍时间戳
         self.cooldown_end_time = 0  # 全局冷却结束时间
+        self.emoji_last_used_time = 0  # 表情包最后使用时间戳
+        self.emoji_lock = asyncio.Lock()  # 表情包生成锁，防止并发问题
         self.config = self._load_config()
         self._clean_legacy_directories()
         self._clean_emoji_directory()
@@ -35,6 +41,7 @@ class PokeMonitorPlugin(Star):
                 },
                 "random_emoji_trigger_probability": 0.5,
                 "post_timeout": 20,
+                "emoji_cooldown_seconds": 20,  # 表情包生成冷却时间(秒)
                 "feature_switches": {
                     "poke_response_enabled": True,
                     "poke_back_enabled": True,
@@ -48,14 +55,15 @@ class PokeMonitorPlugin(Star):
                 with open(config_path, 'w', encoding='utf-8') as f:
                     yaml.dump(default_config, f, allow_unicode=True, default_flow_style=False)
             except Exception as e:
-                pass
+                logger.error(f"配置文件创建失败: {str(e)}")
             return default_config
         
         # 加载现有配置
         try:
             with open(config_path, 'r', encoding='utf-8') as f:
-                return yaml.safe_load(f)
-        except Exception:
+                return yaml.safe_load(f) or {}
+        except Exception as e:
+            logger.error(f"配置文件加载失败: {str(e)}")
             return {}
 
     def _clean_legacy_directories(self):
@@ -68,8 +76,8 @@ class PokeMonitorPlugin(Star):
             try:
                 if os.path.exists(path):
                     shutil.rmtree(path)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"旧目录清理失败: {str(e)}")
 
     def _clean_emoji_directory(self):
         """清理表情包目录"""
@@ -80,8 +88,8 @@ class PokeMonitorPlugin(Star):
                 try:
                     if os.path.isfile(file_path):
                         os.unlink(file_path)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.error(f"表情包文件清理失败: {str(e)}")
 
     def _record_global_poke(self):
         """记录全局戳/拍行为，并清理旧记录"""
@@ -108,7 +116,7 @@ class PokeMonitorPlugin(Star):
     def _should_reply_text(self):
         """判断是否应该发送文字回复"""
         now = time.time()
-        return now >= self.cooldown_end_time  # 不在冷却中即可回复
+        return now >= self.cooldown_end_time
 
     def _set_cooldown(self):
         """设置全局冷却时间（5分钟）"""
@@ -145,13 +153,13 @@ class PokeMonitorPlugin(Star):
                         try:
                             await client.api.call_action('send_poke', **payloads)
                         except Exception as e:
-                            logger.error(f"❌QQ群戳回失败: {str(e)}")
+                            logger.error(f"QQ群戳回失败: {str(e)}")
                             # 尝试私聊戳一戳作为备选
                             try:
                                 private_payloads = {"user_id": sender_id}
                                 await client.api.call_action('send_poke', **private_payloads)
                             except Exception as e2:
-                                logger.error(f"❌QQ私聊戳回失败: {str(e2)}")
+                                logger.error(f"QQ私聊戳回失败: {str(e2)}")
                 else:
                     # 私聊场景
                     try:
@@ -159,7 +167,7 @@ class PokeMonitorPlugin(Star):
                         for _ in range(poke_times):
                             await client.api.call_action('send_poke', **payloads)
                     except Exception as e:
-                        logger.error(f"❌QQ私聊戳回失败: {str(e)}")
+                        logger.error(f"QQ私聊戳回失败: {str(e)}")
             
             elif platform == "wechatpadpro":
                 from astrbot.core.platform.sources.wechatpadpro.wechatpadpro_message_event import WeChatPadProMessageEvent
@@ -191,89 +199,92 @@ class PokeMonitorPlugin(Star):
                             async with aiohttp.ClientSession() as session:
                                 async with session.post(wxapi_url, headers=headers, json=payloads, params=params) as resp:
                                     if resp.status != 200:
-                                        logger.error(f"❌微信拍回失败，状态码: {resp.status}")
-                                        return
+                                        logger.error(f"微信拍回失败，状态码: {resp.status}")
                         except Exception as e:
-                            logger.error(f"❌微信拍回失败: {str(e)}")
+                            logger.error(f"微信拍回失败: {str(e)}")
                 else:
-                    logger.error("❌微信拍回失败: 无法提取群聊名称")
+                    logger.error("微信拍回失败: 无法提取群聊名称")
 
     async def _handle_emoji(self, event, target_id, platform, chatusername=None):
-        """处理随机触发表情包"""
+        """处理随机触发表情包，优化冷却时间记录逻辑"""
         if not self.config.get('feature_switches', {}).get('emoji_trigger_enabled', True):
             return
-        
-        if random.random() >= self.config['random_emoji_trigger_probability']:
-            return
             
-        available_actions = list(self.config.get('emoji_url_mapping', {}).keys())
-        if not available_actions:
-            return
-            
-        selected_action = random.choice(available_actions)
-        emoji_type = self.config['emoji_url_mapping'][selected_action]
-        url = "https://api.lolimi.cn/API/preview/api.php"
-        
-        # 根据平台获取头像URL
-        if platform == "wechatpadpro" and chatusername:
-            # 微信需要先获取用户头像
-            try:
-                headers = {"accept": "application/json", "Content-Type": "application/json"}
-                payloads = {"ChatRoomName": chatusername}
-                params = {"key": event.adapter.auth_key}
-                wxapi_url = event.adapter.base_url + "/group/GetChatroomMemberDetail"
-                
-                async with aiohttp.ClientSession() as session:
-                    async with session.post(wxapi_url, headers=headers, json=payloads, params=params) as resp:
-                        response = await resp.json()
-                
-                members_list = response["Data"]["member_data"]["chatroom_member_list"]
-                big_head_img_url = next(
-                    (member["big_head_img_url"] for member in members_list if member["user_name"] == target_id), None
-                )
-                
-                if not big_head_img_url:
-                    return
-                    
-                params = {'qq': big_head_img_url, "i": "2", "action": "create_meme", "type": emoji_type}
-            except Exception:
+        # 使用锁防止并发问题
+        async with self.emoji_lock:
+            # 冷却时间检查
+            now = time.time()
+            cooldown_seconds = self.config.get('emoji_cooldown_seconds', 20)
+            if now - self.emoji_last_used_time < cooldown_seconds:
+                logger.debug(f"表情包冷却中，剩余时间: {cooldown_seconds - (now - self.emoji_last_used_time):.2f}秒")
                 return
-        else:
-            # QQ直接使用target_id
-            params = {'qq': target_id, "action": "create_meme", "type": emoji_type}
+                
+            # 概率触发检查
+            if random.random() >= self.config['random_emoji_trigger_probability']:
+                return
+                
+            available_actions = list(self.config.get('emoji_url_mapping', {}).keys())
+            if not available_actions:
+                return
+                
+            # 关键优化：在条件通过后立即记录冷却时间，而非等待API响应
+            self.emoji_last_used_time = time.time()
             
-        # 发送请求生成表情包
-        timeout = self.config.get('post_timeout', 20)
-        max_retries = 3
-        for _ in range(max_retries):
+            # 选择表情包动作
+            selected_action = random.choice(available_actions)
+            emoji_type = self.config['emoji_url_mapping'][selected_action]
+            url = "https://api.lolimi.cn/API/preview/api.php"
+            
+            # 根据平台获取头像URL
+            if platform == "wechatpadpro" and chatusername:
+                try:
+                    headers = {"accept": "application/json", "Content-Type": "application/json"}
+                    payloads = {"ChatRoomName": chatusername}
+                    params = {"key": event.adapter.auth_key}
+                    wxapi_url = event.adapter.base_url + "/group/GetChatroomMemberDetail"
+                    
+                    async with aiohttp.ClientSession() as session:
+                        async with session.post(wxapi_url, headers=headers, json=payloads, params=params) as resp:
+                            response = await resp.json()
+                    
+                    members_list = response["Data"]["member_data"]["chatroom_member_list"]
+                    big_head_img_url = next(
+                        (member["big_head_img_url"] for member in members_list if member["user_name"] == target_id), None
+                    )
+                    
+                    if not big_head_img_url:
+                        return
+                            
+                    params = {'qq': big_head_img_url, "i": "2", "action": "create_meme", "type": emoji_type}
+                except Exception as e:
+                    logger.error(f"微信头像获取失败: {str(e)}")
+                    return
+            else:
+                params = {'qq': target_id, "action": "create_meme", "type": emoji_type}
+                
+            # 发送请求生成表情包
+            timeout = self.config.get('post_timeout', 20)
             try:
                 response = requests.get(url, params=params, timeout=timeout)
                 if response.status_code == 200:
                     save_dir = os.path.join("data", "plugins", "astrbot_plugin_pock", "poke_monitor")
                     os.makedirs(save_dir, exist_ok=True)
-                    
+                        
                     filename = f"{selected_action}_{target_id}_{int(time.time())}.gif"
                     image_path = os.path.join(save_dir, filename)
-                    
+                        
                     with open(image_path, "wb") as f:
                         f.write(response.content)
                     yield event.image_result(image_path)
-                    
-                    # 发送后删除图片
+                        
+                    # 清理临时文件
                     if os.path.exists(image_path):
                         try:
                             os.remove(image_path)
-                        except Exception:
-                            pass
-                    break
-                else:
-                    yield event.plain_result(f"表情包请求失败，状态码：{response.status_code}")
-                    break
-            except requests.exceptions.ReadTimeout:
-                continue
+                        except Exception as e:
+                            logger.error(f"表情包文件清理失败: {str(e)}")
             except Exception as e:
-                yield event.plain_result(f"表情包处理出错：{str(e)}")
-                break
+                logger.error(f"表情包请求失败: {str(e)}")
 
     @event_message_type(filter.EventMessageType.ALL)
     async def on_group_message(self, event: AstrMessageEvent):
