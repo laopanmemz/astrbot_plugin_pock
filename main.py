@@ -13,7 +13,7 @@ import asyncio
 
 logger = logging.getLogger(__name__)
 
-@register("poke_monitor", "长安某", "监控戳一戳事件插件", "1.6.0")
+@register("poke_monitor", "长安某", "监控戳一戳事件插件", "1.7.0")
 class PokeMonitorPlugin(Star):
     def __init__(self, context: Context):
         super().__init__(context)
