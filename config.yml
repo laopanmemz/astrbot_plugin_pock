@@ -20,16 +20,18 @@ emoji_url_mapping:
   普拉娜吃: "191"
   捣: "199"
 
-# 随机触发表情包的概率
-random_emoji_trigger_probability: 0.5
-# 请求超时时间
-post_timeout: 20
+
+random_emoji_trigger_probability: 1     # 随机触发表情包的概率
+emoji_cooldown_seconds: 20                # 表情包发送冷却时间（秒）
+post_timeout: 20                                  # 请求超时时间
+
+
 # 功能开关
 feature_switches:
-  poke_response_enabled: true  # 戳机器人回复功能开关
-  poke_back_enabled: true  # 戳回功能开关
-  emoji_trigger_enabled: true  # 触发表情包功能开关
+  poke_response_enabled: true            # 戳机器人回复功能开关
+  poke_back_enabled: true                  # 戳回功能开关
+  emoji_trigger_enabled: true              # 触发表情包功能开关
 
 # 戳 Bot 反击相关概率
-poke_back_probability: 0.3  # 戳 Bot 后反击的概率
-super_poke_probability: 0.1  # 超级加倍（多次戳回）的概率
+poke_back_probability: 0.3                 # 戳 Bot 后反击的概率
+super_poke_probability: 0.1                # 超级加倍（多次戳回）的概率
