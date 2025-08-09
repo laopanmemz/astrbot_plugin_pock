@@ -1,0 +1,114 @@
+{
+  "feature_switches": {
+    "description": "各项主要功能的开关",
+    "type": "object",
+    "items": {
+      "poke_response_enabled": {
+        "description": "机器人被戳/拍时，是否启用文字回复",
+        "type": "bool",
+        "default": true
+      },
+      "poke_back_enabled": {
+        "description": "机器人被戳/拍时，是否启用戳回/拍回",
+        "type": "bool",
+        "default": true
+      },
+      "emoji_trigger_enabled": {
+        "description": "群友互戳/拍时，是否随机制作表情包",
+        "type": "bool",
+        "default": true
+      }
+    }
+  },
+  "poke_probabilities": {
+    "description": "戳一戳/拍一拍相关概率设置",
+    "type": "object",
+    "items": {
+      "poke_back_probability": {
+        "description": "戳回/拍回的基础概率",
+        "type": "float",
+        "hint": "取值范围 0.0 到 1.0，例如 0.3 代表有30%的概率戳回去",
+        "default": 0.3
+      },
+      "super_poke_probability": {
+        "description": "“超级戳/拍”的概率 (在决定戳回后)",
+        "type": "float",
+        "hint": "这是在已触发“戳回”后的二次判定概率。例如，此项为0.1代表戳回时有10%的概率是连续5次的“超级戳/拍”",
+        "default": 0.1
+      }
+    }
+  },
+  "llm_settings": {
+    "description": "LLM大语言模型回复相关设置",
+    "type": "object",
+    "items": {
+        "system_prompt": {
+            "description": "主人格设定 (System Prompt)",
+            "type": "text",
+            "hint": "定义机器人被戳时的基本回复风格和角色设定。",
+            "default": "用户戳你时要回复俏皮、有趣的内容，每次回复风格要略有变化，避免重复。"
+        },
+        "max_poke_count_before_cooldown": {
+            "description": "触发冷却前的最大被戳次数",
+            "type": "int",
+            "hint": "当被戳次数超过此数值后，将触发5分钟的群聊冷却，期间不再进行文字回复。",
+            "default": 3
+        },
+        "poke_1_prompt": {
+            "description": "第1次被戳的提示词",
+            "type": "text",
+            "hint": "可用占位符 {user_nickname} 代表戳你用户的昵称。",
+            "default": "用户{user_nickname}突然戳了你一下，回复要略带无奈，请求不要打扰："
+        },
+        "poke_2_prompt": {
+            "description": "第2次被戳的提示词",
+            "type": "text",
+            "hint": "可用占位符 {user_nickname} 代表戳你用户的昵称。",
+            "default": "用户{user_nickname}戳了你一下，这是你第二次被戳，回复要带点撒娇和警告，带点互动感："
+        },
+        "poke_3_prompt": {
+            "description": "第3次被戳的提示词",
+            "type": "text",
+            "hint": "可用占位符 {user_nickname} 代表戳你用户的昵称。",
+            "default": "用户{user_nickname}戳了你一下，已经你第三次被戳，回复要表示无奈和生气，并且表示不再回复，根据情景自己考虑躲起来或者生闷气等等："
+        },
+        "poke_default_prompt": {
+            "description": "超过3次后被戳的提示词",
+            "type": "text",
+            "hint": "可用占位符 {user_nickname} 代表戳你用户的昵称。",
+            "default": "用户{user_nickname}又戳你了，回复要俏皮、有趣："
+        }
+    }
+  },
+  "emoji_settings": {
+    "description": "表情包制作相关设置",
+    "type": "object",
+    "items": {
+      "random_emoji_trigger_probability": {
+        "description": "触发表情包制作的概率",
+        "type": "float",
+        "hint": "当群友互戳/拍时，以此概率决定是否制作表情包。取值范围 0.0 到 1.0",
+        "default": 0.5
+      },
+      "emoji_cooldown_seconds": {
+        "description": "表情包功能冷却时间（秒）",
+        "type": "int",
+        "hint": "为了防止刷屏，设置一个全局的表情包制作冷却时间",
+        "default": 20
+      },
+      "post_timeout": {
+        "description": "请求表情包API的超时时间（秒）",
+        "type": "int",
+        "default": 20
+      },
+      "emoji_url_mapping": {
+        "description": "表情包动作与类型ID的映射关系 (JSON格式)",
+        "type": "text",
+        "hint": "定义了可用的表情包动作及其对应的API ID。请保持JSON格式正确。",
+        "editor_mode": true,
+        "editor_language": "json",
+        "default": "{\n    \"阿罗娜扔\": \"13\",\n    \"咖波画\": \"33\",\n    \"咖波指\": \"34\",\n    \"咖波蹭\": \"36\",\n    \"丢\": \"38\",\n    \"撕\": \"56\",\n    \"爬\": \"69\",\n    \"顶\": \"102\",\n    \"拍\": \"184\",\n    \"摸\": \"187\",\n    \"捏\": \"188\",\n    \"普拉娜吃\": \"191\",\n    \"捣\": \"199\"\n}"
+      }
+    }
+  }
+}
