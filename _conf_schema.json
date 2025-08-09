@@ -93,7 +93,7 @@
       "emoji_cooldown_seconds": {
         "description": "表情包功能冷却时间（秒）",
         "type": "int",
-        "hint": "为了防止刷屏，设置一个全局的表情包制作冷却时间",
+        "hint": "为了防止刷屏，设置一个表情包制作冷却时间",
         "default": 20
       },
       "post_timeout": {
