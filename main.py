@@ -16,7 +16,7 @@ from astrbot.api.all import *
 logger = logging.getLogger(__name__)
 
 
-@register("poke_monitor", "长安某", "监控戳一戳事件插件", "1.8.0")
+@register("poke_monitor", "长安某", "监控戳一戳事件插件", "2.0.0")
 class PokeMonitorPlugin(Star):
     def __init__(self, context: Context, config: dict):
         super().__init__(context)
